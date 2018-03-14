@@ -15,13 +15,13 @@
 ;                cold-point tropopause height.
 ;---------------------------------------------
 
-;infile = "/nfs/jm13/pduran/rawinsondes/sparc/rawinsondes_0-1000km.nc"
-infile = "/home/patrick/research/data/rawinsonde/rawinsondes_0-1000km.nc"
+infile = "/nfs/jm13/pduran/rawinsondes/sparc/rawinsondes_0-1000km.nc"
+;infile = "/home/patrick/research/data/rawinsonde/rawinsondes_0-1000km.nc"
 cat    = "hur"  ;Storm category for which to compute averages
                 ;Options: "td", "ts", "td+ts", "hur","cat1+2","maj","all"
-avgtype= 0      ;0=Plot simple average; 1=Plot composite average WRT CPT height
-;outdir = "/nfs/jm13/pduran/web/trop/"+cat+"/"
-outdir = "/home/patrick/research/plots/trop/"+cat+"/"
+avgtype= 1      ;0=Plot simple average; 1=Plot composite average WRT CPT height
+outdir = "/nfs/jm13/pduran/web/trop/"+cat+"/"
+;outdir = "/home/patrick/research/plots/trop/"+cat+"/"
 minrad = 0      ;Minimum radius outside of which to pull sonde data
 maxrad = 1000    ;Maximum radius within which to pull sonde data
 dr     = 100    ;Width of radial bands
@@ -53,6 +53,7 @@ stormlonin = ncfile->stormlon
 vmaxin     = ncfile->vmax
 pminin     = ncfile->pmin
 
+;Total number of sondes in the entire dataset
 totnumsondes = dimsizes(droptimein)
 
 ;Compute squared Brunt-Vaisala frequency
@@ -71,8 +72,20 @@ cptin = where(cpzin.lt.mincpz,cptin@_FillValue,cptin)
 cpzin = where(cpzin.eq.tophghtin,cpzin@_FillValue,cpzin)
 cptin = where(cpzin.eq.tophghtin,cptin@_FillValue,cptin)
 
-;Initialize average arrays
+;Vertical grid spacing and midpoint of vertical coordinate
+dz = heightin(1)-heightin(0)
+midz = heightin(dimsizes(heightin)/2)
 nhghts  = dimsizes(heightin)
+
+;Initialize shifted arrays for composite averaging
+if(avgtype.eq.1)then
+   tcshift = new(nhghts*2-1,"float")
+   tcshift!0 = "comphght"
+   tcshift&comphght = ispan(max(heightin)*-1,max(heightin),dz)
+   n2shift = tcshift
+end if
+
+;Initialize average arrays
 pres_avg= new((/nrads,nhghts/),"float")
 tc_avg  = new((/nrads,nhghts/),"float")
 n2_avg  = new((/nrads,nhghts/),"float")
@@ -106,10 +119,10 @@ do i=0,nrads-1
    vmax     := vmaxin    (radinds) 
    pmin     := pminin    (radinds) 
    n2       := n2in      (radinds,:)
-   heightkm  = height/1000.  ;Convert height to km
+
    n2!0 = "radius"
    n2!1 = "height"
-   n2&height = heightkm
+   n2&height = height
 
    ;Get indices for each storm category
    if(cat.eq."td")then
@@ -136,12 +149,10 @@ do i=0,nrads-1
 
    ;Get cold-point tropopause temperatures and heights for each sonde
    ;in this radial bin and category.
-   cpz_cat(i,:dimsizes(catinds)-1) = cpz(catinds)/1000.  ;Convert to km
+   cpz_cat(i,:dimsizes(catinds)-1) = cpz(catinds)
    cpt_cat(i,:dimsizes(catinds)-1) = cpt(catinds)
    ;Get the number of sondes with data up to the cold point or higher
    nsondes(i)= dimsizes(ind(.not.ismissing(cpz_cat(i,:))))
-   ;Get sonde data for each 
-
    ;Compute some mean fields for this radial band
    ;and category
    if(avgtype.eq.0)then ;Compute simple average at every grid point
@@ -149,15 +160,24 @@ do i=0,nrads-1
       tc_avg  (i,:) = dim_avg_n_Wrap(tc  (catinds,:),0)
       n2_avg  (i,:) = dim_avg_n_Wrap(n2  (catinds,:),0)
    else if(avgtype.eq.1) ;Compute composite averge with respect to cold-point height
-      do j=0,nsondes(i)-1
-         if(.not.ismissing(cpz_cat(i,j)))
-            print( cpz_cat(i,j))
-            print( cpt_cat(i,j))
-            print( n2(j,:))
-            print( tc(j,:))
-;            exit
+      do j=0,dimsizes(catinds)-1
+         catind = catinds(j)
+         cpzcur = cpz_cat(i,j)      ;Current cold point height
+         if(.not.ismissing(cpzcur))
+            print( cpzcur)
+            maxhghtshift = max(height)-cpzcur
+            minhghtshift = -cpzcur+dz
+            tccur = tc(catind,:)    ;T profile for this sonde
+            n2cur = n2(catind,:)    ;N^2 profile for this sonde
+            tcshift({0:maxhghtshift}) = (/tccur({cpzcur:})/)
+            tcshift({minhghtshift:0}) = (/tccur({:cpzcur-dz})/)
+            n2shift({0:maxhghtshift}) = (/n2cur({cpzcur:})/)
+            n2shift({minhghtshift:0}) = (/n2cur({:cpzcur-dz})/)
+            print(n2shift)
+            exit
          end if
       end do
+      exit
    end if
    end if
 
