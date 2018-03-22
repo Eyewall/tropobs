@@ -17,18 +17,19 @@
 
 infile = "/nfs/jm13/pduran/rawinsondes/sparc/rawinsondes_0-1000km.nc"
 ;infile = "/home/patrick/research/data/rawinsonde/rawinsondes_0-1000km.nc"
-cat    = "td+ts"  ;Storm category for which to compute averages
+cat    = "maj"  ;Storm category for which to compute averages
                 ;Options: "td", "ts", "td+ts", "hur","cat1+2","maj","all"
 avgtype = 1      ;0=Plot simple average; 1=Plot composite average WRT CPT height
+type    = 0      ;0=Plot; 1=Write composited arrays to output file (only if avgtype=1)
 cpzcomp = 17000  ;Used only if avgtype=1; Height at which to set composite CPT height
 outdir = "/nfs/jm13/pduran/web/trop/"+cat+"/"
 ;outdir = "/home/patrick/research/plots/trop/"+cat+"/"
 minrad = 0      ;Minimum radius outside of which to pull sonde data
-maxrad = 1000    ;Maximum radius within which to pull sonde data
+maxrad = 1000   ;Maximum radius within which to pull sonde data
 dr     = 100    ;Width of radial bands
 mincpz = 14000  ;Minimum cold-point tropopause height allowed (m)
-ymin   = 9.;14.
-ymax   = 25.;21.
+ymin   = 14.;9.
+ymax   = 21;25.
 g = 9.80665
 rads  = ispan(minrad,maxrad,dr)
 nrads = (maxrad-minrad)/dr
@@ -59,6 +60,30 @@ pminin     = ncfile->pmin
 ;Total number of sondes in the entire dataset
 totnumsondes = dimsizes(droptimein)
 
+;Get indices for each storm category
+if(cat.eq."td")then
+   catinds := ind(vmaxin.le.33)
+else if(cat.eq."ts")then
+   catinds := ind(vmaxin.ge.34.and.vmaxin.lt.64)
+else if(cat.eq."td+ts")then
+   catinds := ind(vmaxin.lt.64)
+else if(cat.eq."hur")then
+   catinds := ind(vmaxin.ge.64)
+else if(cat.eq."cat1+2")then
+   catinds := ind(vmaxin.ge.64.and.vmaxin.le.95)
+else if(cat.eq."maj")then
+   catinds := ind(vmaxin.gt.95)
+else if(cat.eq."all")then
+   catinds := ind(vmaxin.ge.0)
+end if
+end if
+end if
+end if
+end if
+end if
+end if
+nsondesincat = dimsizes(catinds)
+
 ;Compute squared Brunt-Vaisala frequency
 tk = tcin+273.15
 th = pot_temp(presin,tk,-1,False)
@@ -74,6 +99,11 @@ cptin = where(cpzin.lt.mincpz,cptin@_FillValue,cptin)
 ;to missing.
 cpzin = where(cpzin.eq.tophghtin,cpzin@_FillValue,cpzin)
 cptin = where(cpzin.eq.tophghtin,cptin@_FillValue,cptin)
+
+;Get cold-point tropopause temperatures and heights for each sonde
+;in this category.
+cpz_catin = cpzin(catinds)
+cpt_catin = cptin(catinds)
 
 ;Vertical grid spacing and midpoint of vertical coordinate
 dz = heightin(1)-heightin(0)
@@ -93,8 +123,8 @@ end if
 pres_avg= new((/nrads,nhghts/),"float")
 tc_avg  = new((/nrads,nhghts/),"float")
 n2_avg  = new((/nrads,nhghts/),"float")
-cpz_cat = new((/nrads,totnumsondes/),"float")
-cpt_cat = new((/nrads,totnumsondes/),"float")
+cpz_cat = new((/nrads,nsondesincat/),"float")
+cpt_cat = new((/nrads,nsondesincat/),"float")
 nsondes = new(nrads,"integer")
 cpz_avg = new(nrads,"float")
 cpt_avg = new(nrads,"float")
@@ -135,48 +165,40 @@ do i=0,nrads-1
    n2!1 = "height"
    n2&height = height
 
-   ;Get indices for each storm category
-   if(cat.eq."td")then
-      catinds := ind(vmax.le.33)
-   else if(cat.eq."ts")then
-      catinds := ind(vmax.ge.34.and.vmax.lt.64)
-   else if(cat.eq."td+ts")then
-      catinds := ind(vmax.lt.64)
-   else if(cat.eq."hur")then
-      catinds := ind(vmax.ge.64)
-   else if(cat.eq."cat1+2")then
-      catinds := ind(vmax.ge.64.and.vmax.le.95)
-   else if(cat.eq."maj")then
-      catinds := ind(vmax.gt.95)
-   else if(cat.eq."all")then
-      catinds := ind(vmax.ge.0)
-   end if
-   end if
-   end if
-   end if
-   end if
-   end if
-   end if
-
+   ;Get indices that correspond to both the selected category
+   ;and this radial bin
+   radcatindsin := get1Dindex(radinds,catinds)
+   radcatinds   := radcatindsin(ind(.not.ismissing(radcatindsin)))
+print( radcatinds)
+print( droplat(radcatinds))
+print( droplon(radcatinds))
+print( stormlat(radcatinds))
+print( stormlon(radcatinds))
+print( vmax(radcatinds))
+dattims = cd_calendar(droptime(radcatinds),0)
+print( dattims)
+exit
    ;Get cold-point tropopause temperatures and heights for each sonde
    ;in this radial bin and category.
-   cpz_cat(i,:dimsizes(catinds)-1) = cpz(catinds)
-   cpt_cat(i,:dimsizes(catinds)-1) = cpt(catinds)
+   print( radcatinds)
+   cpz_cat(i,:dimsizes(radcatinds)-1) = cpzin(radcatinds)
+   cpt_cat(i,:dimsizes(radcatinds)-1) = cptin(radcatinds)
+
    ;Get the number of sondes with data up to the cold point or higher
    nsondes(i)= dimsizes(ind(.not.ismissing(cpz_cat(i,:))))
+
    ;Compute some mean fields for this radial band
    ;and category
    if(avgtype.eq.0)then ;Compute simple average at every grid point
-      pres_avg(i,:) = dim_avg_n_Wrap(pres(catinds,:),0)
-      tc_avg  (i,:) = dim_avg_n_Wrap(tc  (catinds,:),0)
-      n2_avg  (i,:) = dim_avg_n_Wrap(n2  (catinds,:),0)
+      pres_avg(i,:) = dim_avg_n_Wrap(pres(radcatinds,:),0)
+      tc_avg  (i,:) = dim_avg_n_Wrap(tc  (radcatinds,:),0)
+      n2_avg  (i,:) = dim_avg_n_Wrap(n2  (radcatinds,:),0)
    else if(avgtype.eq.1) ;Compute composite average with respect to cold-point height
-      nsondesincat = dimsizes(catinds)
-      do j=0,nsondesincat-1    ;Loop through all sondes in this intensity category
+      do j=0,nsondes(i)-1 ;Loop through all sondes in this intensity category & radbin
          unixj = j + 1
-         print( "Processing sonde "+unixj+" of "+nsondesincat+" for radbin "+unixi+\
+         print( "Processing sonde "+unixj+" of "+nsondes(i)+" for radbin "+unixi+\
                 " of "+nrads+"   "+systemfunc("date"))
-         catind = catinds(j)
+         catind = radcatinds(j)
          cpzcur = cpz_cat(i,j)      ;Current cold point height
          if(.not.ismissing(cpzcur))
             maxhghtshift = max(height)-cpzcur
@@ -222,8 +244,6 @@ else
    n2_avg&comphght = (n2_avg&comphght+cpzcomp)/1000.
 end if
 
-print( n2_avg&comphght)
-
 ;Compute probability distributions
 cpzopt = True
 cpzopt@bin_min = 14.
@@ -238,51 +258,52 @@ pdf_cpt = pdfx(cpt_cat,61,cptopt)
 ;-------------------;
 ;Cross-section plots;
 ;-------------------;
-out_suffix = minrad+"-"+maxrad+"km_"+ymin+"-"+ymax+"km"
-;STATIC STABILITY AND COLD-POINT TROPOPAUSE HEIGHT
-;Transpose array so that height is leftmost dimension
-n2_avg_plot = transpose(n2_avg)
-if(avgtype.eq.0)then
-   wks_stab = gsn_open_wks("png",outdir+"stab+cp_trop_hght_"+out_suffix)
-else
-   wks_stab = gsn_open_wks("png",outdir+"stab+cp_trop_hght_composite"+out_suffix)
+if(type.eq.0)then
+   out_suffix = minrad+"-"+maxrad+"km_"+ymin+"-"+ymax+"km"
+   ;STATIC STABILITY AND COLD-POINT TROPOPAUSE HEIGHT
+   ;Transpose array so that height is leftmost dimension
+   n2_avg_plot = transpose(n2_avg)
+   if(avgtype.eq.0)then
+      wks_stab = gsn_open_wks("png",outdir+"stab+cp_trop_hght_"+out_suffix)
+   else
+      wks_stab = gsn_open_wks("png",outdir+"stab+cp_trop_hght_composite"+out_suffix)
+   end if
+   gsn_define_colormap(wks_stab,"WhiteGreen")
+   stabres = True
+   stabres@cnFillOn = True
+   stabres@cnLevelSelectionMode = "ManualLevels"
+   stabres@cnMinLevelValF = 0
+   stabres@cnMaxLevelValF = 10.0
+   stabres@cnLevelSpacingF = 1.0
+   stabres@cnLineLabelsOn = False
+   stabres@cnLinesOn = False
+   stabres@gsnLeftStringFontHeightF = 0.014
+   stabres@gsnRightStringFontHeightF = stabres@gsnLeftStringFontHeightF
+   stabres@gsnLeftString = "N~S~2~N~ (10~S~-4~N~ s~S~-2~N~) and cold point height"
+   stabres@gsnRightString = "Category: "+str_upper(cat)+"        "+minrad+"-"+maxrad+" km"
+   stabres@tiXAxisString = "Radius (km)"
+   stabres@tiYAxisString = "Height (km)"
+   stabres@lbLabelBarOn = True
+   stabres@lbAutoManage = False
+   stabres@lbOrientation = "Vertical"
+   stabres@cnInfoLabelOn = False
+   ;stabres@trYMinF = 9
+   ;stabres@trYMaxF = 25
+   stabres@trYMinF = ymin
+   stabres@trYMaxF = ymax
+   stabres@tmYROn = False
+   stabres@tmXTOn = False
+   stabres@gsnMaximize = True
+   stabres@gsnDraw = False
+   stabres@gsnFrame = False
+   stab_img = gsn_csm_contour(wks_stab,n2_avg_plot,stabres)
+   tropres = True
+   tropres@gsLineColor = "yellow"
+   tropres@gsLineThicknessF = 18
+   ;trophghts = gsn_add_polyline(wks_stab,stab_img,cpz_avg&radius,cpz_avg,tropres)
+   draw(stab_img)
+   frame(wks_stab)
 end if
-gsn_define_colormap(wks_stab,"WhiteGreen")
-stabres = True
-stabres@cnFillOn = True
-stabres@cnLevelSelectionMode = "ManualLevels"
-stabres@cnMinLevelValF = 0
-stabres@cnMaxLevelValF = 10.0
-stabres@cnLevelSpacingF = 1.0
-stabres@cnLineLabelsOn = False
-stabres@cnLinesOn = False
-stabres@gsnLeftStringFontHeightF = 0.014
-stabres@gsnRightStringFontHeightF = stabres@gsnLeftStringFontHeightF
-stabres@gsnLeftString = "N~S~2~N~ (10~S~-4~N~ s~S~-2~N~) and cold point height"
-stabres@gsnRightString = "Category: "+str_upper(cat)+"        "+minrad+"-"+maxrad+" km"
-stabres@tiXAxisString = "Radius (km)"
-stabres@tiYAxisString = "Height (km)"
-stabres@lbLabelBarOn = True
-stabres@lbAutoManage = False
-stabres@lbOrientation = "Vertical"
-stabres@cnInfoLabelOn = False
-;stabres@trYMinF = 9
-;stabres@trYMaxF = 25
-stabres@trYMinF = ymin
-stabres@trYMaxF = ymax
-stabres@tmYROn = False
-stabres@tmXTOn = False
-stabres@gsnMaximize = True
-stabres@gsnDraw = False
-stabres@gsnFrame = False
-print( n2_avg)
-stab_img = gsn_csm_contour(wks_stab,n2_avg_plot,stabres)
-tropres = True
-tropres@gsLineColor = "yellow"
-tropres@gsLineThicknessF = 18
-;trophghts = gsn_add_polyline(wks_stab,stab_img,cpz_avg&radius,cpz_avg,tropres)
-draw(stab_img)
-frame(wks_stab)
 
 ;-------------;
 ;Distributions;
@@ -318,3 +339,10 @@ pdf_cpt_plot = gsn_csm_xy(pdf_cpt_wks,pdf_cpt@bin_center,pdf_cpt,pdfres)
 ;print( cpz_avg)
 ;print( cpt_avg)
 ;print( sum(nsondes))
+
+;-------------------------------------------------;
+;Write composite arrays to output file, if desired;
+;-------------------------------------------------;
+if(avgtype.eq.1.and.type.eq.1)then
+   printVarSummary( n2shift)
+end if    
