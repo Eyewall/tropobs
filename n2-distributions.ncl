@@ -17,15 +17,18 @@
 
 infile = "/nfs/jm13/pduran/rawinsondes/sparc/rawinsondes_0-1000km.nc"
 ;infile = "/home/patrick/research/data/rawinsonde/rawinsondes_0-1000km.nc"
-cat    = "hur"  ;Storm category for which to compute averages
+cat    = "td+ts"  ;Storm category for which to compute averages
                 ;Options: "td", "ts", "td+ts", "hur","cat1+2","maj","all"
-avgtype= 1      ;0=Plot simple average; 1=Plot composite average WRT CPT height
+avgtype = 1      ;0=Plot simple average; 1=Plot composite average WRT CPT height
+cpzcomp = 17000  ;Used only if avgtype=1; Height at which to set composite CPT height
 outdir = "/nfs/jm13/pduran/web/trop/"+cat+"/"
 ;outdir = "/home/patrick/research/plots/trop/"+cat+"/"
 minrad = 0      ;Minimum radius outside of which to pull sonde data
 maxrad = 1000    ;Maximum radius within which to pull sonde data
 dr     = 100    ;Width of radial bands
 mincpz = 14000  ;Minimum cold-point tropopause height allowed (m)
+ymin   = 9.;14.
+ymax   = 25.;21.
 g = 9.80665
 rads  = ispan(minrad,maxrad,dr)
 nrads = (maxrad-minrad)/dr
@@ -79,9 +82,10 @@ nhghts  = dimsizes(heightin)
 
 ;Initialize shifted arrays for composite averaging
 if(avgtype.eq.1)then
-   tcshift = new(nhghts*2-1,"float")
-   tcshift!0 = "comphght"
-   tcshift&comphght = ispan(max(heightin)*-1,max(heightin),dz)
+   tcshift = new((/100000,nhghts*2-1/),"float")
+   tcshift!0 = "sondes in category"
+   tcshift!1 = "comphght"
+   tcshift&comphght = ispan(max(heightin)*-1,max(heightin),dz)*1.
    n2shift = tcshift
 end if
 
@@ -95,8 +99,15 @@ nsondes = new(nrads,"integer")
 cpz_avg = new(nrads,"float")
 cpt_avg = new(nrads,"float")
 
+;Initialize average arrays for compositing
+if(avgtype.eq.1)then
+   tc_avg := new((/nrads,nhghts*2-1/),"float")
+   n2_avg := new((/nrads,nhghts*2-1/),"float")
+end if
+
 ;Get data only within the selected radial band
 do i=0,nrads-1
+   unixi = i + 1
    minbinrad = rads(i)
    maxbinrad = rads(i+1)
    radinds  := ind(radiusin.ge.minbinrad.and.radiusin.lt.maxbinrad)
@@ -159,31 +170,37 @@ do i=0,nrads-1
       pres_avg(i,:) = dim_avg_n_Wrap(pres(catinds,:),0)
       tc_avg  (i,:) = dim_avg_n_Wrap(tc  (catinds,:),0)
       n2_avg  (i,:) = dim_avg_n_Wrap(n2  (catinds,:),0)
-   else if(avgtype.eq.1) ;Compute composite averge with respect to cold-point height
-      do j=0,dimsizes(catinds)-1
+   else if(avgtype.eq.1) ;Compute composite average with respect to cold-point height
+      nsondesincat = dimsizes(catinds)
+      do j=0,nsondesincat-1    ;Loop through all sondes in this intensity category
+         unixj = j + 1
+         print( "Processing sonde "+unixj+" of "+nsondesincat+" for radbin "+unixi+\
+                " of "+nrads+"   "+systemfunc("date"))
          catind = catinds(j)
          cpzcur = cpz_cat(i,j)      ;Current cold point height
          if(.not.ismissing(cpzcur))
-            print( cpzcur)
             maxhghtshift = max(height)-cpzcur
             minhghtshift = -cpzcur+dz
             tccur = tc(catind,:)    ;T profile for this sonde
             n2cur = n2(catind,:)    ;N^2 profile for this sonde
-            tcshift({0:maxhghtshift}) = (/tccur({cpzcur:})/)
-            tcshift({minhghtshift:0}) = (/tccur({:cpzcur-dz})/)
-            n2shift({0:maxhghtshift}) = (/n2cur({cpzcur:})/)
-            n2shift({minhghtshift:0}) = (/n2cur({:cpzcur-dz})/)
-            print(n2shift)
-            exit
+;            tcshift(j,{0:maxhghtshift}) = (/tccur({cpzcur:})/)
+;            tcshift(j,{minhghtshift:0}) = (/tccur({:cpzcur-dz})/)
+            n2shift(j,{0:maxhghtshift}) = (/n2cur({cpzcur:})/)
+            n2shift(j,{minhghtshift:0}) = (/n2cur({:cpzcur-dz})/)
          end if
       end do
-      exit
+;      tc_avg(i,:) = dim_avg_n_Wrap(tcshift,0)
+      n2_avg(i,:) = dim_avg_n_Wrap(n2shift,0)
    end if
    end if
 
    ;Determine cold point tropopause temperature and height using mean fields
-   cpz_avg(i) = height(minind(tc_avg(i,:)))/1000. ;Convert to km
-   cpt_avg(i) = min(tc_avg(i,:))
+   if(avgtype.eq.0)then
+      cpz_avg(i) = height(minind(tc_avg(i,:)))/1000. ;Convert to km
+      cpt_avg(i) = min(tc_avg(i,:))
+   else
+      cpz_avg(i) = cpzcomp/1000.
+   end if
 end do
 
 ;Assign coordinate variables
@@ -196,9 +213,16 @@ nsondes&radius = midpoints
 copy_VarCoords(nsondes,cpz_avg)
 copy_VarCoords(nsondes,cpt_avg)
 n2_avg!0 = "radius"
-n2_avg!1 = "height"
-n2_avg&radius = midpoints
-n2_avg&height = heightkm
+if(avgtype.eq.0)then
+   n2_avg!1 = "height"
+   n2_avg&radius = midpoints
+   n2_avg&height = heightkm
+else
+   n2_avg&radius = midpoints
+   n2_avg&comphght = (n2_avg&comphght+cpzcomp)/1000.
+end if
+
+print( n2_avg&comphght)
 
 ;Compute probability distributions
 cpzopt = True
@@ -214,17 +238,21 @@ pdf_cpt = pdfx(cpt_cat,61,cptopt)
 ;-------------------;
 ;Cross-section plots;
 ;-------------------;
-out_suffix = minrad+"-"+maxrad+"km"
+out_suffix = minrad+"-"+maxrad+"km_"+ymin+"-"+ymax+"km"
 ;STATIC STABILITY AND COLD-POINT TROPOPAUSE HEIGHT
 ;Transpose array so that height is leftmost dimension
 n2_avg_plot = transpose(n2_avg)
-wks_stab = gsn_open_wks("png",outdir+"stab+cp_trop_hght_"+out_suffix)
+if(avgtype.eq.0)then
+   wks_stab = gsn_open_wks("png",outdir+"stab+cp_trop_hght_"+out_suffix)
+else
+   wks_stab = gsn_open_wks("png",outdir+"stab+cp_trop_hght_composite"+out_suffix)
+end if
 gsn_define_colormap(wks_stab,"WhiteGreen")
 stabres = True
 stabres@cnFillOn = True
 stabres@cnLevelSelectionMode = "ManualLevels"
 stabres@cnMinLevelValF = 0
-stabres@cnMaxLevelValF = 7.0
+stabres@cnMaxLevelValF = 10.0
 stabres@cnLevelSpacingF = 1.0
 stabres@cnLineLabelsOn = False
 stabres@cnLinesOn = False
@@ -238,18 +266,21 @@ stabres@lbLabelBarOn = True
 stabres@lbAutoManage = False
 stabres@lbOrientation = "Vertical"
 stabres@cnInfoLabelOn = False
-stabres@trYMinF = 9
-stabres@trYMaxF = 25
+;stabres@trYMinF = 9
+;stabres@trYMaxF = 25
+stabres@trYMinF = ymin
+stabres@trYMaxF = ymax
 stabres@tmYROn = False
 stabres@tmXTOn = False
 stabres@gsnMaximize = True
 stabres@gsnDraw = False
 stabres@gsnFrame = False
+print( n2_avg)
 stab_img = gsn_csm_contour(wks_stab,n2_avg_plot,stabres)
 tropres = True
 tropres@gsLineColor = "yellow"
 tropres@gsLineThicknessF = 18
-trophghts = gsn_add_polyline(wks_stab,stab_img,cpz_avg&radius,cpz_avg,tropres)
+;trophghts = gsn_add_polyline(wks_stab,stab_img,cpz_avg&radius,cpz_avg,tropres)
 draw(stab_img)
 frame(wks_stab)
 
