@@ -15,16 +15,15 @@
 ;                cold-point tropopause height.
 ;---------------------------------------------
 
-infile = "/nfs/jm13/pduran/rawinsondes/sparc/rawinsondes_0-1000km.nc"
-;infile = "/home/patrick/research/data/rawinsonde/rawinsondes_0-1000km.nc"
-cat    = "td+ts"  ;Storm category for which to compute averages
-                ;Options: "td", "ts", "td+ts", "hur","cat1+2","maj","all"
-avgtype = 1      ;0=Plot simple average; 1=Plot composite average WRT CPT height
-cpzcomp = 17000  ;Used only if avgtype=1; Height at which to set composite CPT height
-outdir = "/nfs/jm13/pduran/web/trop/"+cat+"/"
-;outdir = "/home/patrick/research/plots/trop/"+cat+"/"
+
+machine = "personal"  ;Set to "personal" or "albany"
+cat     = "maj"      ;Storm category for which to compute averages
+                     ;Options: "td", "ts", "td+ts", "hur","cat1+2","maj","all"
+type    = 1     ;0=Plot data; 1=Write to netCDF
+avgtype = 1     ;0=Plot simple average; 1=Plot composite average WRT CPT height
+cpzcomp = 17000 ;Used only if avgtype=1; Height at which to set composite CPT height
 minrad = 0      ;Minimum radius outside of which to pull sonde data
-maxrad = 1000    ;Maximum radius within which to pull sonde data
+maxrad = 300   ;Maximum radius within which to pull sonde data
 dr     = 100    ;Width of radial bands
 mincpz = 14000  ;Minimum cold-point tropopause height allowed (m)
 ymin   = 9.;14.
@@ -32,6 +31,27 @@ ymax   = 25.;21.
 g = 9.80665
 rads  = ispan(minrad,maxrad,dr)
 nrads = (maxrad-minrad)/dr
+if(machine.eq."albany")then
+;   if(avgtype.eq.0)then
+      infile = "/nfs/jm13/pduran/rawinsondes/sparc/rawinsondes_0-1000km.nc"
+;   else
+;      infile = "/nfs/jm13/pduran/rawinsondes/sparc/rawinsondes_"+minrad+"-"\
+;                +maxrad+"km_cpzcomposite.nc"
+;   end if
+   outdir    = "/nfs/jm13/pduran/web/trop/"+cat+"/"
+   ncoutfile = "/nfs/jm13/pduran/rawinsondes/sparc/rawinsondes_"+minrad+"-"\
+                +maxrad+"km_cpzcomposite.nc"
+else
+;   if(avgtype.eq.0)then
+      infile = "/home/patrick/research/data/rawinsonde/rawinsondes_0-1000km.nc"
+;   else
+;      infile = "/home/patrick/research/data/rawinsonde/rawinsondes_"+minrad+"-"\
+;                +maxrad+"km_cpzcomposite.nc"
+;   end if
+   outdir    = "/home/patrick/research/plots/trop/"+cat+"/"
+   ncoutfile = "/home/patrick/research/data/rawinsonde/rawinsondes_"+minrad+"-"\
+                +maxrad+"km_cpzcomposite.nc"
+end if
 
 system("mkdir "+outdir)
 
@@ -235,86 +255,104 @@ cptopt@bin_min = -90
 cptopt@bin_max = -50
 pdf_cpt = pdfx(cpt_cat,61,cptopt)
 
-;-------------------;
-;Cross-section plots;
-;-------------------;
-out_suffix = minrad+"-"+maxrad+"km_"+ymin+"-"+ymax+"km"
-;STATIC STABILITY AND COLD-POINT TROPOPAUSE HEIGHT
-;Transpose array so that height is leftmost dimension
-n2_avg_plot = transpose(n2_avg)
-if(avgtype.eq.0)then
-   wks_stab = gsn_open_wks("png",outdir+"stab+cp_trop_hght_"+out_suffix)
-else
-   wks_stab = gsn_open_wks("png",outdir+"stab+cp_trop_hght_composite"+out_suffix)
+if(type.eq.0)then
+   ;-------------------;
+   ;Cross-section plots;
+   ;-------------------;
+   out_suffix = minrad+"-"+maxrad+"km_"+ymin+"-"+ymax+"km"
+   ;STATIC STABILITY AND COLD-POINT TROPOPAUSE HEIGHT
+   ;Transpose array so that height is leftmost dimension
+   n2_avg_plot = transpose(n2_avg)
+   if(avgtype.eq.0)then
+      wks_stab = gsn_open_wks("png",outdir+"stab+cp_trop_hght_"+out_suffix)
+   else
+      wks_stab = gsn_open_wks("png",outdir+"stab+cp_trop_hght_composite"+out_suffix)
+   end if
+   gsn_define_colormap(wks_stab,"WhiteGreen")
+   stabres = True
+   stabres@cnFillOn = True
+   stabres@cnLevelSelectionMode = "ManualLevels"
+   stabres@cnMinLevelValF = 0
+   stabres@cnMaxLevelValF = 10.0
+   stabres@cnLevelSpacingF = 1.0
+   stabres@cnLineLabelsOn = False
+   stabres@cnLinesOn = False
+   stabres@gsnLeftStringFontHeightF = 0.014
+   stabres@gsnRightStringFontHeightF = stabres@gsnLeftStringFontHeightF
+   stabres@gsnLeftString = "N~S~2~N~ (10~S~-4~N~ s~S~-2~N~) and cold point height"
+   stabres@gsnRightString = "Category: "+str_upper(cat)+"        "+minrad+"-"+maxrad+" km"
+   stabres@tiXAxisString = "Radius (km)"
+   stabres@tiYAxisString = "Height (km)"
+   stabres@lbLabelBarOn = True
+   stabres@lbAutoManage = False
+   stabres@lbOrientation = "Vertical"
+   stabres@cnInfoLabelOn = False
+   ;stabres@trYMinF = 9
+   ;stabres@trYMaxF = 25
+   stabres@trYMinF = ymin
+   stabres@trYMaxF = ymax
+   stabres@tmYROn = False
+   stabres@tmXTOn = False
+   stabres@gsnMaximize = True
+   stabres@gsnDraw = False
+   stabres@gsnFrame = False
+   print( n2_avg)
+   stab_img = gsn_csm_contour(wks_stab,n2_avg_plot,stabres)
+   tropres = True
+   tropres@gsLineColor = "yellow"
+   tropres@gsLineThicknessF = 18
+   ;trophghts = gsn_add_polyline(wks_stab,stab_img,cpz_avg&radius,cpz_avg,tropres)
+   draw(stab_img)
+   frame(wks_stab)
+   
+   ;-------------;
+   ;Distributions;
+   ;-------------;
+   ;COLD POINT TROPOPAUSE HEIGHT
+   pdf_cpz_wks = gsn_open_wks("png",outdir+"pdf_cpz_"+out_suffix)
+   pdf_cpt_wks = gsn_open_wks("png",outdir+"pdf_cpt_"+out_suffix)
+   pdfres = True
+   ;pdfres@tmYROn = False
+   ;pdfres@tmXTOn = False
+   pdfres@gsnMaximize = True
+   pdfres@tiXAxisOn = False
+   pdfres@xyLineThicknessF = 6.
+   pdfres@tiMainFontHeightF = 0.02
+   pdfres@tiMainString = "PDF of Cold-Point Tropopause Height for "+str_upper(cat)
+   pdfres@tiYAxisFontHeightF = 0.02
+   pdfres@tiXAxisFontHeightF = pdfres@tiYAxisFontHeightF
+   pdfres@tiYAxisString = "Percent"
+   pdfres@tiXAxisString = "Cold-Point Tropopause Height (km)"
+   pdfres@trXMinF = cpzopt@bin_min;pdf_cpz@bin_bound_min
+   pdfres@trXMaxF = cpzopt@bin_max;pdf_cpz@bin_bound_max
+   pdfres@trYMaxF = 30
+   pdf_cpz_plot = gsn_csm_xy(pdf_cpz_wks,pdf_cpz@bin_center,pdf_cpz,pdfres)
+   pdfres@tiMainString = "PDF of Cold-Point Tropopause Temperature for "+str_upper(cat)
+   pdfres@tiXAxisString = "Cold-Point Tropopause Temperature (degrees C)"
+   pdfres@trXMinF = cptopt@bin_min;pdf_cpz@bin_bound_min
+   pdfres@trXMaxF = cptopt@bin_max;pdf_cpz@bin_bound_max
+   pdfres@trYMaxF = 11
+   pdf_cpt_plot = gsn_csm_xy(pdf_cpt_wks,pdf_cpt@bin_center,pdf_cpt,pdfres)
+else  ;Write to netCDF output file
+   ;Set attributes for each variable
+   n2_avg@long_name = "squared Brunt-Vaisala frequency"
+   n2_avg@units = "10^-4 s^-2"
+
+   print( "Writing variables to output file...   "+systemfunc("date"))
+   print(" "+ncoutfile)
+   system("rm -f "+ncoutfile)
+   fout = addfile(ncoutfile,"c")
+   setfileoption(fout,"DefineMode",True)
+
+   ;Define global attributes
+   fileatts = True
+   fileatts@minrad = minrad+" km"
+   fileatts@maxrad = maxrad+" km"
+   fileatts@dr     = dr+" km"
+   fileatts@mincpz = mincpz+" m"
+   cr = tochar(10)
+   fileatts@description = "Contains composite averages computed with respect"+cr+\
+			  "the cold-point tropopause height."
+   fileattdef(fout,fileatts)
+   printVarSummary( n2_avg)
 end if
-gsn_define_colormap(wks_stab,"WhiteGreen")
-stabres = True
-stabres@cnFillOn = True
-stabres@cnLevelSelectionMode = "ManualLevels"
-stabres@cnMinLevelValF = 0
-stabres@cnMaxLevelValF = 10.0
-stabres@cnLevelSpacingF = 1.0
-stabres@cnLineLabelsOn = False
-stabres@cnLinesOn = False
-stabres@gsnLeftStringFontHeightF = 0.014
-stabres@gsnRightStringFontHeightF = stabres@gsnLeftStringFontHeightF
-stabres@gsnLeftString = "N~S~2~N~ (10~S~-4~N~ s~S~-2~N~) and cold point height"
-stabres@gsnRightString = "Category: "+str_upper(cat)+"        "+minrad+"-"+maxrad+" km"
-stabres@tiXAxisString = "Radius (km)"
-stabres@tiYAxisString = "Height (km)"
-stabres@lbLabelBarOn = True
-stabres@lbAutoManage = False
-stabres@lbOrientation = "Vertical"
-stabres@cnInfoLabelOn = False
-;stabres@trYMinF = 9
-;stabres@trYMaxF = 25
-stabres@trYMinF = ymin
-stabres@trYMaxF = ymax
-stabres@tmYROn = False
-stabres@tmXTOn = False
-stabres@gsnMaximize = True
-stabres@gsnDraw = False
-stabres@gsnFrame = False
-print( n2_avg)
-stab_img = gsn_csm_contour(wks_stab,n2_avg_plot,stabres)
-tropres = True
-tropres@gsLineColor = "yellow"
-tropres@gsLineThicknessF = 18
-;trophghts = gsn_add_polyline(wks_stab,stab_img,cpz_avg&radius,cpz_avg,tropres)
-draw(stab_img)
-frame(wks_stab)
-
-;-------------;
-;Distributions;
-;-------------;
-;COLD POINT TROPOPAUSE HEIGHT
-pdf_cpz_wks = gsn_open_wks("png",outdir+"pdf_cpz_"+out_suffix)
-pdf_cpt_wks = gsn_open_wks("png",outdir+"pdf_cpt_"+out_suffix)
-pdfres = True
-;pdfres@tmYROn = False
-;pdfres@tmXTOn = False
-pdfres@gsnMaximize = True
-pdfres@tiXAxisOn = False
-pdfres@xyLineThicknessF = 6.
-pdfres@tiMainFontHeightF = 0.02
-pdfres@tiMainString = "PDF of Cold-Point Tropopause Height for "+str_upper(cat)
-pdfres@tiYAxisFontHeightF = 0.02
-pdfres@tiXAxisFontHeightF = pdfres@tiYAxisFontHeightF
-pdfres@tiYAxisString = "Percent"
-pdfres@tiXAxisString = "Cold-Point Tropopause Height (km)"
-pdfres@trXMinF = cpzopt@bin_min;pdf_cpz@bin_bound_min
-pdfres@trXMaxF = cpzopt@bin_max;pdf_cpz@bin_bound_max
-pdfres@trYMaxF = 30
-pdf_cpz_plot = gsn_csm_xy(pdf_cpz_wks,pdf_cpz@bin_center,pdf_cpz,pdfres)
-pdfres@tiMainString = "PDF of Cold-Point Tropopause Temperature for "+str_upper(cat)
-pdfres@tiXAxisString = "Cold-Point Tropopause Temperature (degrees C)"
-pdfres@trXMinF = cptopt@bin_min;pdf_cpz@bin_bound_min
-pdfres@trXMaxF = cptopt@bin_max;pdf_cpz@bin_bound_max
-pdfres@trYMaxF = 11
-pdf_cpt_plot = gsn_csm_xy(pdf_cpt_wks,pdf_cpt@bin_center,pdf_cpt,pdfres)
-
-;print( nsondes)
-;printVarSummary( n2_avg_plot)
-;print( cpz_avg)
-;print( cpt_avg)
-;print( sum(nsondes))
