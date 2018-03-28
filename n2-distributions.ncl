@@ -22,8 +22,11 @@ cat     = "maj"      ;Storm category for which to compute averages
 type    = 1     ;0=Plot data; 1=Write to netCDF
 avgtype = 1     ;0=Plot simple average; 1=Plot composite average WRT CPT height
 cpzcomp = 17000 ;Used only if avgtype=1; Height at which to set composite CPT height
+if(type.eq.1)then ;If we're writing to netCDF file, set cold point height to zero
+   cpzcomp = 0
+end if
 minrad = 0      ;Minimum radius outside of which to pull sonde data
-maxrad = 300   ;Maximum radius within which to pull sonde data
+maxrad = 200   ;Maximum radius within which to pull sonde data
 dr     = 100    ;Width of radial bands
 mincpz = 14000  ;Minimum cold-point tropopause height allowed (m)
 ymin   = 9.;14.
@@ -107,6 +110,7 @@ if(avgtype.eq.1)then
    tcshift!1 = "comphght"
    tcshift&comphght = ispan(max(heightin)*-1,max(heightin),dz)*1.
    n2shift = tcshift
+   pshift  = tcshift
 end if
 
 ;Initialize average arrays
@@ -123,6 +127,7 @@ cpt_avg = new(nrads,"float")
 if(avgtype.eq.1)then
    tc_avg := new((/nrads,nhghts*2-1/),"float")
    n2_avg := new((/nrads,nhghts*2-1/),"float")
+    p_avg := new((/nrads,nhghts*2-1/),"float")
 end if
 
 ;Get data only within the selected radial band
@@ -201,16 +206,20 @@ do i=0,nrads-1
          if(.not.ismissing(cpzcur))
             maxhghtshift = max(height)-cpzcur
             minhghtshift = -cpzcur+dz
-            tccur = tc(catind,:)    ;T profile for this sonde
-            n2cur = n2(catind,:)    ;N^2 profile for this sonde
-;            tcshift(j,{0:maxhghtshift}) = (/tccur({cpzcur:})/)
-;            tcshift(j,{minhghtshift:0}) = (/tccur({:cpzcur-dz})/)
+            tccur = tc  (catind,:)    ;T profile for this sonde
+            n2cur = n2  (catind,:)    ;N^2 profile for this sonde
+             pcur = pres(catind,:)    ;P profile for this sonde
+            tcshift(j,{0:maxhghtshift}) = (/tccur({cpzcur:})/)
+            tcshift(j,{minhghtshift:0}) = (/tccur({:cpzcur-dz})/)
             n2shift(j,{0:maxhghtshift}) = (/n2cur({cpzcur:})/)
             n2shift(j,{minhghtshift:0}) = (/n2cur({:cpzcur-dz})/)
+             pshift(j,{0:maxhghtshift}) = (/ pcur({cpzcur:})/)
+             pshift(j,{minhghtshift:0}) = (/ pcur({:cpzcur-dz})/)
          end if
       end do
-;      tc_avg(i,:) = dim_avg_n_Wrap(tcshift,0)
+      tc_avg(i,:) = dim_avg_n_Wrap(tcshift,0)
       n2_avg(i,:) = dim_avg_n_Wrap(n2shift,0)
+       p_avg(i,:) = dim_avg_n_Wrap( pshift,0)
    end if
    end if
 
@@ -241,8 +250,8 @@ else
    n2_avg&radius = midpoints
    n2_avg&comphght = (n2_avg&comphght+cpzcomp)/1000.
 end if
-
-print( n2_avg&comphght)
+copy_VarCoords(n2_avg,tc_avg)
+copy_VarCoords(n2_avg, p_avg)
 
 ;Compute probability distributions
 cpzopt = True
@@ -335,8 +344,18 @@ if(type.eq.0)then
    pdf_cpt_plot = gsn_csm_xy(pdf_cpt_wks,pdf_cpt@bin_center,pdf_cpt,pdfres)
 else  ;Write to netCDF output file
    ;Set attributes for each variable
+   comprad  = n2_avg&radius
+   comphght = n2_avg&comphght
+   comprad@long_name = "distance from TC center"
+   comprad@units = "km"
+   comphght@long_name = "height above or below cold-point tropopause"
+   comphght@units = "km"
    n2_avg@long_name = "squared Brunt-Vaisala frequency"
    n2_avg@units = "10^-4 s^-2"
+   tc_avg@long_name = "temperature"
+   tc_avg@units = "deg C"
+    p_avg@long_name = "pressure"
+    p_avg@units = "hPa"
 
    print( "Writing variables to output file...   "+systemfunc("date"))
    print(" "+ncoutfile)
@@ -350,9 +369,38 @@ else  ;Write to netCDF output file
    fileatts@maxrad = maxrad+" km"
    fileatts@dr     = dr+" km"
    fileatts@mincpz = mincpz+" m"
-   cr = tochar(10)
-   fileatts@description = "Contains composite averages computed with respect"+cr+\
-			  "the cold-point tropopause height."
+   fileatts@description = "Contains composite averages computed with respect to"+\
+			  " the cold-point tropopause height. comphght=0 is the"+\
+                          " value at the cold point."
    fileattdef(fout,fileatts)
-   printVarSummary( n2_avg)
+
+   ;Define variable attributes
+   dimNames = (/"radius","comphght"/)
+   dimSizes = (/dimsizes(comprad),dimsizes(comphght)/)
+   dimUnlim = (/False,False/)
+   filedimdef(fout,dimNames,dimSizes,dimUnlim)
+
+   ;Define coordinate variables for writing
+   filevardef(fout,"comphght",typeof(comphght),getvardims(comphght))
+   filevardef(fout,"radius",typeof(comprad),getvardims(comprad))
+   filevarattdef(fout,"comphght",comphght)
+   filevarattdef(fout,"radius",comprad)
+
+   ;Define the variables to write
+   var_names = (/"n2_avg","tc_avg","p_avg"/)
+   var_types = (/"float","float","float"/)
+   filevardef(fout,var_names,var_types,dimNames)
+   filevarattdef(fout,"n2_avg",n2_avg)
+   filevarattdef(fout,"tc_avg",tc_avg)
+   filevarattdef(fout,"p_avg" , p_avg)
+
+   ;Write variables to output file
+   ;NOTE: The (/xxx/) syntax here tells NCL to output only the data
+   ;values to the predefined locations in the file. This greatly
+   ;inproves the efficiency of the writing routine.
+   fout->comphght = (/comphght/)
+   fout->radius = (/comprad/)
+   fout->n2_avg = (/n2_avg/)
+   fout->tc_avg = (/tc_avg/)
+   fout->p_avg  = (/ p_avg/)
 end if
