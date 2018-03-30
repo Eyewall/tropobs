@@ -17,10 +17,10 @@
 
 
 machine = "personal"  ;Set to "personal" or "albany"
-cat     = "maj"      ;Storm category for which to compute averages
+cat     = "td+ts"      ;Storm category for which to compute averages
                      ;Options: "td", "ts", "td+ts", "hur","cat1+2","maj","all"
-intype  = 1     ;0=Read rawinsonde input file; 1=Read composite average input file
-type    = 0     ;0=Plot data; 1=Write composite averages to netCDF
+intype  = 0     ;0=Read rawinsonde input file; 1=Read composite average input file
+type    = 1     ;0=Plot data; 1=Write composite averages to netCDF
 avgtype = 1     ;0=Plot simple average; 1=Plot composite average WRT CPT height
 cpzcomp = 17000 ;Used only if avgtype=1; Height at which to set composite CPT height
 if(type.eq.1)then ;If we're writing to netCDF file, set cold point height to zero
@@ -101,8 +101,12 @@ if(intype.eq.0)then
    tk = tcin+273.15
    th = pot_temp(presin,tk,-1,False)
    dthdz = center_finite_diff_n(th,heightin,False,0,1)  ;Units K/m
+   ;A couple of sondes in the dataset have outlier tk values that
+   ;cause dthdz to be nan. Replace these nans with missing values.
+   replace_ieeenan(dthdz,dthdz@_FillValue,0)
+   test = dthdz
    n2in = (g/th)*dthdz*10000 ;Units 10^-4 s^-2
-   
+
    ;If the cold-point height is smaller than the user-defined
    ;minimum value, set it and the cold point temperature to missing.
    cpzin = where(cpzin.lt.mincpz,cpzin@_FillValue,cpzin)
@@ -146,7 +150,7 @@ if(intype.eq.0)then
    end if
    
    ;Get data only within the selected radial band
-   do i=0,nrads-1
+   do i=4,nrads-1
       unixi = i + 1
       minbinrad = rads(i)
       maxbinrad = rads(i+1)
@@ -170,7 +174,7 @@ if(intype.eq.0)then
       vmax     := vmaxin    (radinds) 
       pmin     := pminin    (radinds) 
       n2       := n2in      (radinds,:)
-   
+
       n2!0 = "radius"
       n2!1 = "height"
       n2&height = height
@@ -197,7 +201,7 @@ if(intype.eq.0)then
       end if
       end if
       end if
-   
+
       ;Get cold-point tropopause temperatures and heights for each sonde
       ;in this radial bin and category.
       cpz_cat(i,:dimsizes(catinds)-1) = cpz(catinds)
@@ -232,8 +236,13 @@ if(intype.eq.0)then
                 pshift(j,{minhghtshift:0}) = (/ pcur({:cpzcur-dz})/)
             end if
          end do
+         test = dim_avg_n_Wrap(n2shift,0)
+         if (any(isnan_ieee(test))) then
+            print( "NaN detected!! i="+i+"  j="+j)
+            exit
+         end if
          tc_avg(i,:) = dim_avg_n_Wrap(tcshift,0)
-         n2_avg(i,:) = dim_avg_n_Wrap(n2shift,0)
+         n2_avg(i,:) = test
           p_avg(i,:) = dim_avg_n_Wrap( pshift,0)
       end if
       end if
@@ -318,10 +327,11 @@ if(type.eq.0)then
    ;Transpose array so that height is leftmost dimension
    n2_avg_plot = transpose(n2_avg)
    if(avgtype.eq.0)then
-      wks_stab = gsn_open_wks("png",outdir+"stab+cp_trop_hght_"+out_suffix)
+      outfile = outdir+"stab+cp_trop_hght_"+out_suffix
    else
-      wks_stab = gsn_open_wks("png",outdir+"stab+cp_trop_hght_composite"+out_suffix)
+      outfile = outdir+"stab+cp_trop_hght_composite"+out_suffix
    end if
+   wks_stab = gsn_open_wks("png",outfile)
    gsn_define_colormap(wks_stab,"WhiteGreen")
    stabres = True
    stabres@cnFillOn = True
@@ -350,11 +360,13 @@ if(type.eq.0)then
    stabres@gsnMaximize = True
    stabres@gsnDraw = False
    stabres@gsnFrame = False
+   print( n2_avg_plot)
    stab_img = gsn_csm_contour(wks_stab,n2_avg_plot,stabres)
    tropres = True
    tropres@gsLineColor = "yellow"
    tropres@gsLineThicknessF = 18
    ;trophghts = gsn_add_polyline(wks_stab,stab_img,cpz_avg&radius,cpz_avg,tropres)
+   print( "Writing image to "+outfile)
    draw(stab_img)
    frame(wks_stab)
 end if
