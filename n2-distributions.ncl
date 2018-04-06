@@ -19,8 +19,8 @@
 machine = "personal"  ;Set to "personal" or "albany"
 cat     = "td+ts"      ;Storm category for which to compute averages
                      ;Options: "td", "ts", "td+ts", "hur","cat1+2","maj","all"
-intype  = 0     ;0=Read rawinsonde input file; 1=Read composite average input file
-type    = 1     ;0=Plot data; 1=Write composite averages to netCDF
+intype  = 1     ;0=Read rawinsonde input file; 1=Read composite average input file
+type    = 0     ;0=Plot data; 1=Write composite averages to netCDF
 avgtype = 1     ;0=Plot simple average; 1=Plot composite average WRT CPT height
 cpzcomp = 17000 ;Used only if avgtype=1; Height at which to set composite CPT height
 if(type.eq.1)then ;If we're writing to netCDF file, set cold point height to zero
@@ -30,8 +30,8 @@ minrad = 0      ;Minimum radius outside of which to pull sonde data
 maxrad = 1000   ;Maximum radius within which to pull sonde data
 dr     = 100    ;Width of radial bands
 mincpz = 14000  ;Minimum cold-point tropopause height allowed (m)
-ymin   = -10;14.
-ymax   = 10.;21.
+ymin   = -5;14.
+ymax   = 5.;21.
 g = 9.80665
 rads  = ispan(minrad,maxrad,dr)
 nrads = (maxrad-minrad)/dr
@@ -104,7 +104,6 @@ if(intype.eq.0)then
    ;A couple of sondes in the dataset have outlier tk values that
    ;cause dthdz to be nan. Replace these nans with missing values.
    replace_ieeenan(dthdz,dthdz@_FillValue,0)
-   test = dthdz
    n2in = (g/th)*dthdz*10000 ;Units 10^-4 s^-2
 
    ;If the cold-point height is smaller than the user-defined
@@ -150,7 +149,7 @@ if(intype.eq.0)then
    end if
    
    ;Get data only within the selected radial band
-   do i=4,nrads-1
+   do i=0,nrads-1
       unixi = i + 1
       minbinrad = rads(i)
       maxbinrad = rads(i+1)
@@ -236,13 +235,8 @@ if(intype.eq.0)then
                 pshift(j,{minhghtshift:0}) = (/ pcur({:cpzcur-dz})/)
             end if
          end do
-         test = dim_avg_n_Wrap(n2shift,0)
-         if (any(isnan_ieee(test))) then
-            print( "NaN detected!! i="+i+"  j="+j)
-            exit
-         end if
          tc_avg(i,:) = dim_avg_n_Wrap(tcshift,0)
-         n2_avg(i,:) = test
+         n2_avg(i,:) = dim_avg_n_Wrap(n2shift,0)
           p_avg(i,:) = dim_avg_n_Wrap( pshift,0)
       end if
       end if
@@ -366,7 +360,7 @@ if(type.eq.0)then
    tropres@gsLineColor = "yellow"
    tropres@gsLineThicknessF = 18
    ;trophghts = gsn_add_polyline(wks_stab,stab_img,cpz_avg&radius,cpz_avg,tropres)
-   print( "Writing image to "+outfile)
+   print( "Writing image to "+outfile+".png")
    draw(stab_img)
    frame(wks_stab)
 end if
