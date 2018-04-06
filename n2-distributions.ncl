@@ -94,6 +94,8 @@ else
    n2_avg = ncfile->n2_avg
    tc_avg = ncfile->tc_avg
    p_avg  = ncfile->p_avg
+   nsondes= ncfile->nsondes
+   radius = ncfile->radius
 end if
 
 if(intype.eq.0)then
@@ -274,7 +276,7 @@ if(intype.eq.0)then
    end if
    copy_VarCoords(n2_avg,tc_avg)
    copy_VarCoords(n2_avg, p_avg)
-end if  ;intype=1
+end if
 
 if(intype.eq.0.and.type.eq.0)then
    ;Compute and plot probability distributions
@@ -368,8 +370,13 @@ if(type.eq.0)then
    stabres@gsnMaximize = True
    stabres@gsnDraw = False
    stabres@gsnFrame = False
-   print( n2_avg_plot)
    stab_img = gsn_csm_contour(wks_stab,n2_avg_plot,stabres)
+   ;Add number of sondes along bottom axis
+   txres=True
+   txres@txFontHeightF = 0.02
+   txx = radius
+   txy = ymin+0.5
+   text= gsn_add_text(wks_stab,stab_img,tostring(nsondes),txx,txy,txres)
    tropres = True
    tropres@gsLineColor = "yellow"
    tropres@gsLineThicknessF = 18
@@ -387,11 +394,14 @@ if(type.eq.0)then
    tcres@cnMaxLevelValF = -40
    tcres@cnLevelSpacingF = 1.
    tc_img = gsn_csm_contour(wks_tc,tc_avg_plot,tcres)
+   ;Add number of sondes along bottom axis
+   text= gsn_add_text(wks_tc,tc_img,tostring(nsondes),txx,txy,txres)
+   ;Overlay contours for coldest brightness temperatures
    tccontres = stabres
    tccontres@gsnLeftString = " "
    tccontres@cnFillOn = False
    tccontres@cnMinLevelValF = -90
-   tccontres@cnMaxLevelValF = -75
+   tccontres@cnMaxLevelValF = -74
    tccontres@cnLevelSpacingF = 1 
 ;   tccontres@cnLineLabelsOn = True
    tccontres@cnLinesOn = True
