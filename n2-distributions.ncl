@@ -350,7 +350,11 @@ if(type.eq.0)then
    stabres@gsnLeftString = "N~S~2~N~ (10~S~-4~N~ s~S~-2~N~) and cold point height"
    stabres@gsnRightString = "Category: "+str_upper(cat)+"        "+minrad+"-"+maxrad+" km"
    stabres@tiXAxisString = "Radius (km)"
-   stabres@tiYAxisString = "Height (km)"
+   if(avgtype.eq.0)then
+      stabres@tiYAxisString = "Height (km)"
+   else
+      stabres@tiYAxisString = "Height relative to cold point (km)"
+   end if
    stabres@lbLabelBarOn = True
    stabres@lbAutoManage = False
    stabres@lbOrientation = "Vertical"
