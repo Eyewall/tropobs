@@ -18,8 +18,8 @@
 ;---------------------------------------------
 
 
-machine = "albany"  ;Set to "personal" or "albany"
-cat     = "maj"      ;Storm category for which to compute averages
+machine = "personal"  ;Set to "personal" or "albany"
+cat     = "hur"      ;Storm category for which to compute averages
                      ;Options: "td", "ts", "td+ts", "hur","cat1+2","maj","all"
 intype  = 1     ;0=Read rawinsonde input file; 1=Read composite average input file
 type    = 0     ;0=Plot data; 1=Write composite averages to netCDF
@@ -321,15 +321,21 @@ if(type.eq.0)then
    ;Cross-section plots;
    ;-------------------;
    out_suffix = minrad+"-"+maxrad+"km_"+ymin+"-"+ymax+"km"
-   ;STATIC STABILITY AND COLD-POINT TROPOPAUSE HEIGHT
-   ;Transpose array so that height is leftmost dimension
+   ;Transpose arrays so that height is leftmost dimension
    n2_avg_plot = transpose(n2_avg)
+   tc_avg_plot = transpose(tc_avg)
+
+   ;Set output file names
    if(avgtype.eq.0)then
-      outfile = outdir+"stab+cp_trop_hght_"+out_suffix
+      outfilen2 = outdir+"stab+cp_trop_hght_"+out_suffix
+      outfiletc = outdir+"temp+cp_trop_hght_"+out_suffix
    else
-      outfile = outdir+"stab+cp_trop_hght_composite"+out_suffix
+      outfilen2 = outdir+"stab+cp_trop_hght_composite"+out_suffix
+      outfiletc = outdir+"temp+cp_trop_hght_composite"+out_suffix
    end if
-   wks_stab = gsn_open_wks("png",outfile)
+
+   ;STATIC STABILITY AND COLD-POINT TROPOPAUSE HEIGHT
+   wks_stab = gsn_open_wks("png",outfilen2)
    gsn_define_colormap(wks_stab,"WhiteGreen")
    stabres = True
    stabres@cnFillOn = True
@@ -364,9 +370,34 @@ if(type.eq.0)then
    tropres@gsLineColor = "yellow"
    tropres@gsLineThicknessF = 18
    ;trophghts = gsn_add_polyline(wks_stab,stab_img,cpz_avg&radius,cpz_avg,tropres)
-   print( "Writing image to "+outfile+".png")
+   print( "Writing N^2 image to "+outfilen2+".png")
    draw(stab_img)
    frame(wks_stab)
+
+   ;TEMPERATURE
+   wks_tc = gsn_open_wks("png",outfiletc)
+   gsn_define_colormap(wks_tc,"rainbow")
+   tcres = stabres
+   tcres@gsnLeftString = "Temperature ~S~o~N~C"
+   tcres@cnMinLevelValF = -80
+   tcres@cnMaxLevelValF = -40
+   tcres@cnLevelSpacingF = 1.
+   tc_img = gsn_csm_contour(wks_tc,tc_avg_plot,tcres)
+   tccontres = stabres
+   tccontres@gsnLeftString = " "
+   tccontres@cnFillOn = False
+   tccontres@cnMinLevelValF = -90
+   tccontres@cnMaxLevelValF = -75
+   tccontres@cnLevelSpacingF = 1 
+;   tccontres@cnLineLabelsOn = True
+   tccontres@cnLinesOn = True
+   tccontres@cnLineThicknessF = 4.
+   tccontres@cnLineColor = "yellow"
+   tccontimg = gsn_csm_contour(wks_tc,tc_avg_plot,tccontres)
+   overlay(tc_img,tccontimg)
+   print( "Writing temperature image to "+outfilen2+".png")
+   draw(tc_img)
+   frame(wks_tc)
 end if
 
 ;Write to composite output file, if desired
