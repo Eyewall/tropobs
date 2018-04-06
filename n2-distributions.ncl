@@ -13,11 +13,13 @@
 ;
 ; 06 March 2017: Added composite averaging with respect to the
 ;                cold-point tropopause height.
+; 05 April 2017: Added IBTrACS storm type to ensure that all storms
+;                included here are tropical.
 ;---------------------------------------------
 
 
-machine = "personal"  ;Set to "personal" or "albany"
-cat     = "td+ts"      ;Storm category for which to compute averages
+machine = "albany"  ;Set to "personal" or "albany"
+cat     = "maj"      ;Storm category for which to compute averages
                      ;Options: "td", "ts", "td+ts", "hur","cat1+2","maj","all"
 intype  = 1     ;0=Read rawinsonde input file; 1=Read composite average input file
 type    = 0     ;0=Plot data; 1=Write composite averages to netCDF
@@ -83,6 +85,7 @@ if(intype.eq.0)then
    sondelonin = ncfile->sondelon
    radiusin   = ncfile->radius
    azimuthin  = ncfile->azimuth
+   stormtypein= ncfile->stormtype
    stormlatin = ncfile->stormlat
    stormlonin = ncfile->stormlon
    vmaxin     = ncfile->vmax
@@ -159,20 +162,21 @@ if(intype.eq.0)then
       droplat  := droplatin (radinds) 
       droplon  := droplonin (radinds) 
       height   := heightin 
-      cpt      := cptin     (radinds) 
-      cpz      := cpzin     (radinds) 
-      tophght  := tophghtin (radinds) 
-      pres     := presin    (radinds,:) 
-      tc       := tcin      (radinds,:) 
-      sondelat := sondelatin(radinds,:) 
-      sondelon := sondelonin(radinds,:) 
-      radius   := radiusin  (radinds) 
-      azimuth  := azimuthin (radinds) 
-      stormlat := stormlatin(radinds) 
-      stormlon := stormlonin(radinds) 
-      vmax     := vmaxin    (radinds) 
-      pmin     := pminin    (radinds) 
-      n2       := n2in      (radinds,:)
+      cpt      := cptin      (radinds) 
+      cpz      := cpzin      (radinds) 
+      tophght  := tophghtin  (radinds) 
+      pres     := presin     (radinds,:) 
+      tc       := tcin       (radinds,:) 
+      sondelat := sondelatin (radinds,:) 
+      sondelon := sondelonin (radinds,:) 
+      radius   := radiusin   (radinds) 
+      azimuth  := azimuthin  (radinds) 
+      stormtype:= stormtypein(radinds) 
+      stormlat := stormlatin (radinds) 
+      stormlon := stormlonin (radinds) 
+      vmax     := vmaxin     (radinds) 
+      pmin     := pminin     (radinds) 
+      n2       := n2in       (radinds,:)
 
       n2!0 = "radius"
       n2!1 = "height"
@@ -180,19 +184,19 @@ if(intype.eq.0)then
    
       ;Get indices for each storm category
       if(cat.eq."td")then
-         catinds := ind(vmax.le.33)
+         catinds := ind(vmax.le.33.and.stormtype.eq.0)
       else if(cat.eq."ts")then
-         catinds := ind(vmax.ge.34.and.vmax.lt.64)
+         catinds := ind(vmax.ge.34.and.vmax.lt.64.and.stormtype.eq.0)
       else if(cat.eq."td+ts")then
-         catinds := ind(vmax.lt.64)
+         catinds := ind(vmax.lt.64.and.stormtype.eq.0)
       else if(cat.eq."hur")then
-         catinds := ind(vmax.ge.64)
+         catinds := ind(vmax.ge.64.and.stormtype.eq.0)
       else if(cat.eq."cat1+2")then
-         catinds := ind(vmax.ge.64.and.vmax.le.95)
+         catinds := ind(vmax.ge.64.and.vmax.le.95.and.stormtype.eq.0)
       else if(cat.eq."maj")then
-         catinds := ind(vmax.gt.95)
+         catinds := ind(vmax.gt.95.and.stormtype.eq.0)
       else if(cat.eq."all")then
-         catinds := ind(vmax.ge.0)
+         catinds := ind(vmax.ge.0.and.stormtype.eq.0)
       end if
       end if
       end if
@@ -374,6 +378,8 @@ if(intype.eq.0.and.type.eq.1)
    comprad@units = "km"
    comphght@long_name = "height above or below cold-point tropopause"
    comphght@units = "km"
+   comphght@_FillValue = n2_avg@_FillValue
+   nsondes@long_name = "Number of rawinsondes included in the average (must have data up to the cold point)"
    n2_avg@long_name = "squared Brunt-Vaisala frequency"
    n2_avg@units = "10^-4 s^-2"
    tc_avg@long_name = "temperature"
@@ -407,8 +413,10 @@ if(intype.eq.0.and.type.eq.1)
    ;Define coordinate variables for writing
    filevardef(fout,"comphght",typeof(comphght),getvardims(comphght))
    filevardef(fout,"radius",typeof(comprad),getvardims(comprad))
+   filevardef(fout,"nsondes",typeof(nsondes),getvardims(nsondes))
    filevarattdef(fout,"comphght",comphght)
    filevarattdef(fout,"radius",comprad)
+   filevarattdef(fout,"nsondes",comprad)
 
    ;Define the variables to write
    var_names = (/"n2_avg","tc_avg","p_avg"/)
@@ -422,8 +430,10 @@ if(intype.eq.0.and.type.eq.1)
    ;NOTE: The (/xxx/) syntax here tells NCL to output only the data
    ;values to the predefined locations in the file. This greatly
    ;inproves the efficiency of the writing routine.
+   printVarSummary( comphght)
    fout->comphght = (/comphght/)
    fout->radius = (/comprad/)
+   fout->nsondes= (/nsondes/)
    fout->n2_avg = (/n2_avg/)
    fout->tc_avg = (/tc_avg/)
    fout->p_avg  = (/ p_avg/)
