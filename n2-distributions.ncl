@@ -18,12 +18,8 @@
 ;---------------------------------------------
 
 
-<<<<<<< HEAD
 machine = "albany"  ;Set to "personal" or "albany"
-=======
-machine = "personal"  ;Set to "personal" or "albany"
->>>>>>> 6b338a9502905f540b049ee529fc1fcc7427a6cf
-cat     = "td+ts"      ;Storm category for which to compute averages
+cat     = "maj"      ;Storm category for which to compute averages
                      ;Options: "td", "ts", "td+ts", "hur","cat1+2","maj","all"
 intype  = 0     ;0=Read rawinsonde input file; 1=Read composite average input file
 type    = 1     ;0=Plot data; 1=Write composite averages to netCDF
@@ -111,7 +107,6 @@ if(intype.eq.0)then
    ;A couple of sondes in the dataset have outlier tk values that
    ;cause dthdz to be nan. Replace these nans with missing values.
    replace_ieeenan(dthdz,dthdz@_FillValue,0)
-   test = dthdz
    n2in = (g/th)*dthdz*10000 ;Units 10^-4 s^-2
 
    ;If the cold-point height is smaller than the user-defined
@@ -157,7 +152,7 @@ if(intype.eq.0)then
    end if
    
    ;Get data only within the selected radial band
-   do i=4,nrads-1
+   do i=0,nrads-1
       unixi = i + 1
       minbinrad = rads(i)
       maxbinrad = rads(i+1)
@@ -167,7 +162,6 @@ if(intype.eq.0)then
       droplat  := droplatin (radinds) 
       droplon  := droplonin (radinds) 
       height   := heightin 
-<<<<<<< HEAD
       cpt      := cptin      (radinds) 
       cpz      := cpzin      (radinds) 
       tophght  := tophghtin  (radinds) 
@@ -183,24 +177,7 @@ if(intype.eq.0)then
       vmax     := vmaxin     (radinds) 
       pmin     := pminin     (radinds) 
       n2       := n2in       (radinds,:)
-   
-=======
-      cpt      := cptin     (radinds) 
-      cpz      := cpzin     (radinds) 
-      tophght  := tophghtin (radinds) 
-      pres     := presin    (radinds,:) 
-      tc       := tcin      (radinds,:) 
-      sondelat := sondelatin(radinds,:) 
-      sondelon := sondelonin(radinds,:) 
-      radius   := radiusin  (radinds) 
-      azimuth  := azimuthin (radinds) 
-      stormlat := stormlatin(radinds) 
-      stormlon := stormlonin(radinds) 
-      vmax     := vmaxin    (radinds) 
-      pmin     := pminin    (radinds) 
-      n2       := n2in      (radinds,:)
 
->>>>>>> 6b338a9502905f540b049ee529fc1fcc7427a6cf
       n2!0 = "radius"
       n2!1 = "height"
       n2&height = height
