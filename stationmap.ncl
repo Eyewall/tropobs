@@ -36,6 +36,8 @@ do i=0,nstns-1
    nsondes(i) = systemfunc("grep -i "+stn+"- "+sondelist+" | wc | awk '{print $1}'")
 end do
 
+totnumsondes = sum(toint(nsondes))
+
 ;Plot the map
 wkstype = "png"
 wks = gsn_open_wks(wkstype,outdir+"stationmap")
@@ -64,11 +66,19 @@ map = gsn_csm_map(wks,res)
 
 ;Overlay text to indicate number of sondes at each station
 txres = True
-txres@txFont = 1
+txres@txFont = 22
 txres@txFontColor = "blue"
-txres@txFontHeightF = 0.01
+txres@txFontHeightF = 0.015
 txres@txFontThicknessF = 4.
 txres@txJust = "centercenter"
 tx = gsn_add_text(wks,map,nsondes,lons,lats,txres)
+
+;Add total number of sondes
+totnumtext = "Total: "+totnumsondes
+txres@txFont = 22
+txres@txFontHeightF = 0.03
+;txres@txFontThicknessF = 10.
+txres@txJust = "BottomLeft"
+tottx = gsn_add_text(wks,map,totnumtext,res@mpMinLonF+.3,res@mpMinLatF+.3,txres)
 draw(map)
 frame(wks)
