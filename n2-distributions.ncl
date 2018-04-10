@@ -19,10 +19,18 @@
 
 
 machine = "personal"  ;Set to "personal" or "albany"
+intorir = 1          ;Set to 0 to get composite averages for storm categories
+                     ;Set to 1 to get composite averages for IR brightness temps
 cat     = "hur"      ;Storm category for which to compute averages
                      ;Options: "td", "ts", "td+ts", "hur","cat1+2","maj","all"
-intype  = 1     ;0=Read rawinsonde input file; 1=Read composite average input file
-type    = 0     ;0=Plot data; 1=Write composite averages to netCDF
+                     ;Used only if intorit=0
+irscene = "coldest"  ;IR satellite scene for composite averaging
+                     ;Options: "coldest", "cold", "warm"
+                     ;Used only if intorir=1
+coldcutoff = -50     ;IR brightness temperature bin cutoff temperature (deg C)
+warmcutoff = -30     ;Used only if intorir=1
+intype  = 0     ;0=Read rawinsonde input file; 1=Read composite average input file
+type    = 1     ;0=Plot data; 1=Write composite averages to netCDF
 avgtype = 1     ;0=Plot simple average; 1=Plot composite average WRT CPT height
 cpzcomp = 17000 ;Used only if avgtype=1; Height at which to set composite CPT height
 if(type.eq.1)then ;If we're writing to netCDF file, set cold point height to zero
@@ -90,6 +98,7 @@ if(intype.eq.0)then
    stormlonin = ncfile->stormlon
    vmaxin     = ncfile->vmax
    pminin     = ncfile->pmin
+   irbtin     = ncfile->irbt
 else
    n2_avg = ncfile->n2_avg
    tc_avg = ncfile->tc_avg
@@ -179,34 +188,46 @@ if(intype.eq.0)then
       vmax     := vmaxin     (radinds) 
       pmin     := pminin     (radinds) 
       n2       := n2in       (radinds,:)
+      irbt     := irbtin     (radinds)
 
       n2!0 = "radius"
       n2!1 = "height"
       n2&height = height
    
       ;Get indices for each storm category
-      if(cat.eq."td")then
-         catinds := ind(vmax.le.33.and.stormtype.eq.0)
-      else if(cat.eq."ts")then
-         catinds := ind(vmax.ge.34.and.vmax.lt.64.and.stormtype.eq.0)
-      else if(cat.eq."td+ts")then
-         catinds := ind(vmax.lt.64.and.stormtype.eq.0)
-      else if(cat.eq."hur")then
-         catinds := ind(vmax.ge.64.and.stormtype.eq.0)
-      else if(cat.eq."cat1+2")then
-         catinds := ind(vmax.ge.64.and.vmax.le.95.and.stormtype.eq.0)
-      else if(cat.eq."maj")then
-         catinds := ind(vmax.gt.95.and.stormtype.eq.0)
-      else if(cat.eq."all")then
-         catinds := ind(vmax.ge.0.and.stormtype.eq.0)
+      if(intorir.eq.0)then
+         if(cat.eq."td")then
+            catinds := ind(vmax.le.33.and.stormtype.eq.0)
+         else if(cat.eq."ts")then
+            catinds := ind(vmax.ge.34.and.vmax.lt.64.and.stormtype.eq.0)
+         else if(cat.eq."td+ts")then
+            catinds := ind(vmax.lt.64.and.stormtype.eq.0)
+         else if(cat.eq."hur")then
+            catinds := ind(vmax.ge.64.and.stormtype.eq.0)
+         else if(cat.eq."cat1+2")then
+            catinds := ind(vmax.ge.64.and.vmax.le.95.and.stormtype.eq.0)
+         else if(cat.eq."maj")then
+            catinds := ind(vmax.gt.95.and.stormtype.eq.0)
+         else if(cat.eq."all")then
+            catinds := ind(vmax.ge.0.and.stormtype.eq.0)
+         end if
+         end if
+         end if
+         end if
+         end if
+         end if
+         end if
+      else
+         if(irscene.eq."coldest")then
+            catinds := ind(irbt.le.coldcutoff)
+         else if(irscene.eq."cold")then
+            catinds := ind(irbt.gt.coldcutoff.and.irbt.le.warmcutoff)
+         else if(irscene.eq."warm")then
+            catinds := ind(irbt.gt.warmcutoff)
+         end if
+         end if
+         end if
       end if
-      end if
-      end if
-      end if
-      end if
-      end if
-      end if
-
       ;Get cold-point tropopause temperatures and heights for each sonde
       ;in this radial bin and category.
       cpz_cat(i,:dimsizes(catinds)-1) = cpz(catinds)
@@ -246,7 +267,6 @@ if(intype.eq.0)then
           p_avg(i,:) = dim_avg_n_Wrap( pshift,0)
       end if
       end if
-   
       ;Determine cold point tropopause temperature and height using mean fields
       if(avgtype.eq.0)then
          cpz_avg(i) = height(minind(tc_avg(i,:)))/1000. ;Convert to km
@@ -439,6 +459,39 @@ if(intype.eq.0.and.type.eq.1)
    setfileoption(fout,"DefineMode",True)
 
    ;Define global attributes
+   if(intorir.eq.0)then
+      if(cat.eq.td)then
+         cgroup = "tropical depressions"
+      else if(cat.eq."ts")then
+         cgroup = "tropical storms"
+      else if(cat.eq."td+ts")then
+         cgroup = "tropical depressions and tropical storms"
+      else if(cat.eq."hur")then
+         cgroup = "all hurricanes"
+      else if(cat.eq."cat1+2")then
+         cgroup = "category 1 and 2 hurricanes"
+      else if(cat.eq."maj")then
+         cgroup = "major hurricanes"
+      else if(cat.eq."all")then
+         cgroup = "all sondes"
+      end if
+      end if
+      end if
+      end if
+      end if
+      end if
+      end if
+   else
+      if(irscene.eq."coldest")then
+         cgroup = "brightness temperatures colder than "+coldcutoff
+      else if(irscene.eq."cold")then
+         cgroup = "brightness temperatures between "+warmcutoff+" and "+coldcutuff
+      else if(irscene.eq."warm")then
+         cgroup = "brightness temperatures warmer than "+warmcutoff
+      end if
+      end if
+      end if
+   end if
    fileatts = True
    fileatts@minrad = minrad+" km"
    fileatts@maxrad = maxrad+" km"
@@ -446,7 +499,8 @@ if(intype.eq.0.and.type.eq.1)
    fileatts@mincpz = mincpz+" m"
    fileatts@description = "Contains composite averages computed with respect to"+\
 			  " the cold-point tropopause height. comphght=0 is the"+\
-                          " value at the cold point."
+                          " value at the cold point. These averages are"+\
+                          " computed for "+cgroup
    fileattdef(fout,fileatts)
 
    ;Define variable attributes
