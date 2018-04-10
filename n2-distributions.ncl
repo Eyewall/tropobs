@@ -119,6 +119,7 @@ if(intype.eq.0)then
    ;cause dthdz to be nan. Replace these nans with missing values.
    replace_ieeenan(dthdz,dthdz@_FillValue,0)
    n2in = (g/th)*dthdz*10000 ;Units 10^-4 s^-2
+   replace_ieeenan(n2in,n2in@_FillValue,0)
 
    ;If the cold-point height is smaller than the user-defined
    ;minimum value, set it and the cold point temperature to missing.
