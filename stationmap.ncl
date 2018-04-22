@@ -10,7 +10,7 @@
 ; of each station.
 ;---------------------------------------------
 
-machine = "personal"  ;Set to either "personal" or "albany"
+machine = "albany"  ;Set to either "personal" or "albany"
 if(machine.eq."personal")then
    stnlist   = "/home/patrick/research/data/rawinsonde/ListOfStations.dat"
    sondelist = "/home/patrick/research/data/rawinsonde/rawinsondes_0-1000km"
@@ -25,6 +25,15 @@ stids = systemfunc("cat "+stnlist+" | sed '1d' | awk -F',' '{print $1}'")
 lats  = tofloat(systemfunc("cat "+stnlist+" | sed '1d' | awk -F',' '{print $6}'"))
 lons  = tofloat(systemfunc("cat "+stnlist+" | sed '1d' | awk -F',' '{print $7}'"))
 
+;Split input strings to get only the storm types and station numbers
+nlines  = stringtoint(systemfunc("wc "+sondelist+" | awk '{print $1}'"))
+inlines = asciiread(sondelist,nlines,"string")
+linesplit = str_split_csv(inlines," ",3)
+stormtypes = stringtoint(linesplit(:,6))
+dirsplit = str_split_csv(linesplit(:,0),"/",3)
+filenamesplit = str_split_csv(dirsplit(:,7),"-",3)
+stnnums = stringtoint(filenamesplit(:,0))
+
 ;Loop through all of the stations and get number
 ;of sondes from each station included in the dataset.
 nstns = dimsizes(stids)
@@ -32,10 +41,17 @@ nsondes = new(nstns,"string")
 do i=0,nstns-1
    unixi = i + 1
    print( "Processing station "+unixi+" of "+nstns+"   "+systemfunc("date"))
-   stn = stids(i)
-   nsondes(i) = systemfunc("grep -i "+stn+"- "+sondelist+" | wc | awk '{print $1}'")
+   stn = stringtoint(stids(i))
+   ;None of the observations from these three stations are in tropical systems,
+   ;but for some reason that I haven't been able to figure out, the script
+   ;still wants to count them. Set all to a space so that the numbers are not
+   ;plotted. Else, set each station to the appropriate number.
+   if(stn.eq.14918.or.stn.eq.23062.or.stn.eq.23066)then
+      nsondes(i) = " "
+   else
+      nsondes(i) = dimsizes(ind(stnnums.eq.stn.and.stormtypes.eq.0))
+   end if
 end do
-
 totnumsondes = sum(toint(nsondes))
 
 ;Plot the map

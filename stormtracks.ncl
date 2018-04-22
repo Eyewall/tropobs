@@ -9,7 +9,7 @@
 ; and maximum intensity for each sonde obs.
 ;---------------------------------------------
 
-machine = "personal"  ;Set to either "personal" or "albany"
+machine = "albany"  ;Set to either "personal" or "albany"
 if(machine.eq."personal")then
    infile   = "/home/patrick/research/data/rawinsonde/rawinsondes_0-1000km.nc"
    outdir    = "/home/patrick/research/plots/"
@@ -23,11 +23,12 @@ ncfile = addfile(infile,"r")
 lats = ncfile->stormlat
 lons = ncfile->stormlon
 vmax = ncfile->vmax
+stormtype = ncfile->stormtype
 
 ;Get indices for each storm category
-tdinds = ind(vmax.lt.34)
-tsinds = ind(vmax.ge.34.and.vmax.lt.64)
-hurinds= ind(vmax.ge.64)
+tdinds = ind(vmax.lt.34.and.stormtype.eq.0)
+tsinds = ind(vmax.ge.34.and.vmax.lt.64.and.stormtype.eq.0)
+hurinds= ind(vmax.ge.64.and.stormtype.eq.0)
 
 ;Plot the map
 wkstype = "png"
