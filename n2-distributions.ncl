@@ -18,13 +18,13 @@
 ;---------------------------------------------
 
 
-machine = "personal"  ;Set to "personal" or "albany"
+machine = "albany"  ;Set to "personal" or "albany"
 intorir = 1          ;Set to 0 to get composite averages for storm categories
                      ;Set to 1 to get composite averages for IR brightness temps
 cat     = "hur"      ;Storm category for which to compute averages
                      ;Options: "td", "ts", "td+ts", "hur","cat1+2","maj","all"
                      ;Used only if intorit=0
-irscene = "coldest"  ;IR satellite scene for composite averaging
+irscene = "warm"  ;IR satellite scene for composite averaging
                      ;Options: "coldest", "cold", "warm"
                      ;Used only if intorir=1
 coldcutoff = -50     ;IR brightness temperature bin cutoff temperature (deg C)
@@ -45,6 +45,10 @@ ymax   = 5.;21.
 g = 9.80665
 rads  = ispan(minrad,maxrad,dr)
 nrads = (maxrad-minrad)/dr
+
+if(intorir.eq.1)then
+   cat = irscene
+end if
 
 if(intype.eq.1.and.type.eq.1)then
    print( "ERROR: intype=1 and type=1, which would overwrite input file.")
@@ -486,7 +490,7 @@ if(intype.eq.0.and.type.eq.1)
       if(irscene.eq."coldest")then
          cgroup = "brightness temperatures colder than "+coldcutoff
       else if(irscene.eq."cold")then
-         cgroup = "brightness temperatures between "+warmcutoff+" and "+coldcutuff
+         cgroup = "brightness temperatures between "+warmcutoff+" and "+coldcutoff
       else if(irscene.eq."warm")then
          cgroup = "brightness temperatures warmer than "+warmcutoff
       end if
