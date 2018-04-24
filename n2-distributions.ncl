@@ -18,7 +18,7 @@
 ;---------------------------------------------
 
 
-machine = "albany"  ;Set to "personal" or "albany"
+machine = "personal"  ;Set to "personal" or "albany"
 intorir = 1          ;Set to 0 to get composite averages for storm categories
                      ;Set to 1 to get composite averages for IR brightness temps
 cat     = "hur"      ;Storm category for which to compute averages
@@ -224,11 +224,11 @@ if(intype.eq.0)then
          end if
       else
          if(irscene.eq."coldest")then
-            catinds := ind(irbt.le.coldcutoff)
+            catinds := ind(irbt.le.coldcutoff.and.stormtype.eq.0)
          else if(irscene.eq."cold")then
-            catinds := ind(irbt.gt.coldcutoff.and.irbt.le.warmcutoff)
+            catinds := ind(irbt.gt.coldcutoff.and.irbt.le.warmcutoff.and.stormtype.eq.0)
          else if(irscene.eq."warm")then
-            catinds := ind(irbt.gt.warmcutoff)
+            catinds := ind(irbt.gt.warmcutoff.and.stormtype.eq.0)
          end if
          end if
          end if
